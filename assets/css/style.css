@@ -209,17 +209,6 @@ h6 {
   margin: 15px;
 }
 
-.aboutTable {
-    display: flex;
-    flex-direction: row;
-    align-items: flex-start;
-    justify-content: center;
-    margin: 0 auto;
-    padding: 50px;
-    font-size: 18px;
-    line-height: 50px;
-  }
-
 /*--------------------------------------------------------------
 # Hero Section
 --------------------------------------------------------------*/
