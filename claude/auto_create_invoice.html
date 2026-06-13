@@ -343,7 +343,7 @@ let settings = {
   minHours:140, maxHours:180, monthlyFee:500000, hourlyRate:3750,
   bankName:"",
   bankBranch:"",
-  bankType:"普通",
+  bankType:"",
   bankNo:"",
   bankHolder:"",
   payDay:0,
@@ -799,9 +799,20 @@ ${settings.myAddress}`;
     // RFC 2822 形式でMIMEメッセージ構築
     status.textContent="メールを送信しています...";
     const boundary="==BOUNDARY_"+Date.now();
-    const mime=[
+
+    // UTF-8文字列 → base64
+    const encodeB64 = str => {
+      const bytes = new TextEncoder().encode(str);
+      let bin = "";
+      bytes.forEach(b => bin += String.fromCharCode(b));
+      return btoa(bin);
+    };
+
+    const encodedFilename = encodeURIComponent(filename);
+
+    const mime = [
       `To: ${to}`,
-      `Subject: =?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`,
+      `Subject: =?UTF-8?B?${encodeB64(subject)}?=`,
       "MIME-Version: 1.0",
       `Content-Type: multipart/mixed; boundary="${boundary}"`,
       "",
@@ -809,12 +820,12 @@ ${settings.myAddress}`;
       "Content-Type: text/plain; charset=UTF-8",
       "Content-Transfer-Encoding: base64",
       "",
-      btoa(unescape(encodeURIComponent(body))),
+      encodeB64(body),
       "",
       `--${boundary}`,
-      `Content-Type: application/pdf; name="${filename}"`,
+      `Content-Type: application/pdf; name*=UTF-8''${encodedFilename}`,
       "Content-Transfer-Encoding: base64",
-      `Content-Disposition: attachment; filename="${filename}"`,
+      `Content-Disposition: attachment; filename*=UTF-8''${encodedFilename}`,
       "",
       pdfBase64,
       "",
@@ -822,8 +833,11 @@ ${settings.myAddress}`;
     ].join("\r\n");
 
     // base64url エンコード
-    const encoded=btoa(unescape(encodeURIComponent(mime)))
-      .replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+    const mimeBytes = new TextEncoder().encode(mime);
+    let mimeBin = "";
+    mimeBytes.forEach(b => mimeBin += String.fromCharCode(b));
+    const encoded = btoa(mimeBin)
+      .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 
     const resp=await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send",{
       method:"POST",
