@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>勤怠・請求書管理 - GUWON</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Hiragino Sans','Meiryo',sans-serif;background:#f0f4f8;min-height:100vh}
+#header{background:white;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:10}
+#header-inner{max-width:760px;margin:0 auto;padding:14px 16px 0}
+#app-title{font-size:17px;font-weight:800;color:#1e293b;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+#working-badge{font-size:11px;font-weight:700;background:#dcfce7;color:#166534;padding:2px 8px;border-radius:20px;margin-left:auto;display:none}
+#tabs{display:flex}
+.tab-btn{flex:1;padding:10px 2px;border:none;background:transparent;cursor:pointer;font-size:11px;color:#64748b;border-bottom:3px solid transparent;font-weight:500;transition:all .15s}
+.tab-btn.active{color:#1e40af;border-bottom-color:#1e40af;font-weight:700}
+#body{max-width:760px;margin:0 auto;padding:16px}
+.card{background:white;border-radius:14px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:20px;margin-bottom:14px}
+.btn{border:none;border-radius:8px;cursor:pointer;font-weight:700;transition:all .15s}
+.btn-green{background:#16a34a;color:white;width:100%;padding:14px;font-size:16px;border-radius:10px}
+.btn-green:hover{background:#15803d}
+.btn-red{background:#dc2626;color:white;width:100%;padding:14px;font-size:16px;border-radius:10px}
+.btn-red:hover{background:#b91c1c}
+.btn-blue{background:#1e40af;color:white;padding:10px 18px;font-size:14px}
+.btn-blue:hover{background:#1d4ed8}
+.btn-sky{background:#0284c7;color:white;width:100%;padding:12px;font-size:14px;border-radius:8px}
+.btn-sky:hover{background:#0369a1}
+.btn-purple{background:#7c3aed;color:white;width:100%;padding:12px;font-size:14px;border-radius:8px}
+.btn-purple:hover{background:#6d28d9}
+.btn-gray{background:#e2e8f0;color:#475569;padding:10px 18px;font-size:14px}
+.btn-gray:hover{background:#cbd5e1}
+input,textarea,select{width:100%;padding:9px 12px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:14px;outline:none;font-family:inherit}
+input:focus,textarea:focus,select:focus{border-color:#3b82f6}
+label.lbl{font-size:12px;color:#64748b;font-weight:600;display:block;margin-bottom:5px}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;padding:8px;font-size:11px;color:#64748b;border-bottom:2px solid #e2e8f0;background:#f8fafc}
+td{padding:8px;font-size:12px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1e293b;color:white;padding:12px 24px;border-radius:10px;font-size:13px;z-index:200;display:none;max-width:90vw;text-align:center;line-height:1.6}
+#modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;display:none;align-items:center;justify-content:center;padding:16px}
+#modal-box{background:white;border-radius:16px;padding:24px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto}
+.hidden{display:none}
+.edit-btn{background:#eff6ff;border:none;border-radius:6px;color:#1e40af;cursor:pointer;font-size:12px;padding:3px 7px;font-weight:600}
+.nowrap{white-space:nowrap}.right{text-align:right}.center{text-align:center}
+.row2{display:flex;gap:12px;flex-wrap:wrap}.row2>div{flex:1;min-width:120px}
+.email-tag{display:inline-flex;align-items:center;gap:4px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:20px;padding:3px 10px;font-size:12px;color:#1e40af;margin:3px}
+.email-tag button{background:none;border:none;cursor:pointer;color:#94a3b8;font-size:14px;padding:0;line-height:1}
+.email-tag button:hover{color:#ef4444}
+/* Gmail API セクション */
+#gmail-api-setup{background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;padding:16px;margin-bottom:12px}
+#gmail-api-setup.connected{background:#f0fdf4;border-color:#86efac}
+.step-badge{display:inline-block;background:#1e40af;color:white;border-radius:50%;width:20px;height:20px;text-align:center;line-height:20px;font-size:11px;font-weight:700;margin-right:6px}
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div id="header-inner">
+    <div id="app-title">🕐 勤怠・請求書管理
+      <span style="font-size:12px;color:#64748b;font-weight:400">GUWON株式会社</span>
+      <span id="working-badge">● 勤務中</span>
+    </div>
+    <div id="tabs">
+      <button class="tab-btn active" onclick="switchTab('clock')">⏱ 打刻</button>
+      <button class="tab-btn" onclick="switchTab('records')">📋 記録</button>
+      <button class="tab-btn" onclick="switchTab('invoice')">📄 請求書</button>
+      <button class="tab-btn" onclick="switchTab('settings')">⚙️ 設定</button>
+    </div>
+  </div>
+</div>
+
+<div id="body">
+
+  <!-- ===== 打刻 ===== -->
+  <div id="tab-clock">
+    <div class="card" style="text-align:center">
+      <div id="clock-display" style="font-size:42px;font-weight:800;color:#1e293b;letter-spacing:1px"></div>
+      <div id="date-display" style="color:#64748b;font-size:13px;margin-top:4px"></div>
+    </div>
+    <div class="card" id="clock-in-card">
+      <label class="lbl">メモ（任意）</label>
+      <input type="text" id="note-input" placeholder="例: 開発作業、打ち合わせ" style="margin-bottom:14px"/>
+      <button class="btn btn-green" onclick="clockIn()">出勤打刻</button>
+    </div>
+    <div class="card hidden" id="clock-out-card">
+      <div style="background:#f0fdf4;border-radius:8px;padding:12px 16px;margin-bottom:14px">
+        <div style="font-size:12px;color:#166534;font-weight:600">出勤時刻</div>
+        <div id="clocked-in-time" style="font-size:22px;font-weight:700;color:#15803d"></div>
+        <div id="clocked-in-note" style="font-size:12px;color:#166534;margin-top:3px"></div>
+        <div id="elapsed" style="font-size:12px;color:#64748b;margin-top:4px"></div>
+      </div>
+      <div style="font-size:12px;color:#94a3b8;margin-bottom:12px;text-align:center">退勤打刻時に休憩60分を自動差し引きします</div>
+      <button class="btn btn-red" onclick="clockOut()">退勤打刻</button>
+    </div>
+    <div class="card hidden" id="today-card">
+      <div style="font-size:12px;font-weight:700;color:#64748b;margin-bottom:8px">今日の記録</div>
+      <div id="today-list"></div>
+    </div>
+  </div>
+
+  <!-- ===== 記録 ===== -->
+  <div id="tab-records" class="hidden">
+    <div class="card" style="padding:14px 16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <span style="font-weight:700;color:#1e293b;font-size:14px">勤怠記録</span>
+        <input type="month" id="rec-month" style="width:auto;padding:6px 10px" onchange="renderRecords()"/>
+      </div>
+    </div>
+    <div class="card hidden" id="records-empty" style="text-align:center;color:#94a3b8;padding:36px">この月の記録はありません</div>
+    <div class="card" id="records-table-card" style="padding:0;overflow:auto">
+      <table>
+        <thead><tr><th>日付</th><th>出勤</th><th>退勤</th><th>休憩</th><th>実働</th><th>メモ</th><th></th></tr></thead>
+        <tbody id="records-tbody"></tbody>
+        <tfoot id="records-tfoot"></tfoot>
+      </table>
+    </div>
+  </div>
+
+  <!-- ===== 請求書 ===== -->
+  <div id="tab-invoice" class="hidden">
+    <div class="card" style="padding:14px 16px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span style="font-size:13px;font-weight:700;color:#1e293b">対象月:</span>
+        <input type="month" id="inv-month" style="width:auto;padding:6px 10px" onchange="renderInvoice()"/>
+      </div>
+    </div>
+
+    <!-- 金額サマリ -->
+    <div class="card" id="amount-summary"></div>
+
+    <!-- Gmail送信 -->
+    <div class="card">
+      <div style="font-size:14px;font-weight:800;color:#1e293b;margin-bottom:12px">📧 Gmail送信</div>
+
+      <!-- API接続状態 -->
+      <div id="gmail-api-setup">
+        <div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:10px">⚙️ Gmail API 初期設定</div>
+        <div style="font-size:11px;color:#78350f;line-height:1.7;margin-bottom:10px">
+          <span class="step-badge">1</span>Google Cloud Console でクライアントIDを取得<br/>
+          <span class="step-badge">2</span>以下に貼り付けて「接続する」をクリック<br/>
+          <span class="step-badge">3</span>Googleアカウントでログイン承認（初回のみ）
+        </div>
+        <div style="margin-bottom:8px">
+          <label class="lbl">Google OAuth クライアントID</label>
+          <input type="text" id="gmail-client-id" placeholder="xxxx.apps.googleusercontent.com" style="font-size:12px"/>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn btn-blue" style="flex:1;padding:9px" onclick="connectGmailAPI()">🔗 Googleアカウントに接続する</button>
+          <button class="btn btn-gray" style="padding:9px 14px" onclick="showSetupGuide()">📖 設定手順</button>
+        </div>
+      </div>
+
+      <!-- 接続済み表示 -->
+      <div id="gmail-connected" class="hidden" style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:12px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div style="font-size:12px;font-weight:700;color:#166534">✅ Gmail接続済み</div>
+            <div id="gmail-user-email" style="font-size:11px;color:#166534;margin-top:2px"></div>
+          </div>
+          <button class="btn btn-gray" style="padding:6px 12px;font-size:12px" onclick="disconnectGmail()">切断</button>
+        </div>
+      </div>
+
+      <!-- 送信先 -->
+      <div style="margin-bottom:14px">
+        <div style="font-size:11px;color:#64748b;margin-bottom:4px">送信先:</div>
+        <div id="mail-to-label" style="font-size:12px;color:#1e40af;font-weight:600"></div>
+      </div>
+
+      <!-- 送信ボタン -->
+      <button class="btn btn-sky" id="send-btn" onclick="sendWithGmailAPI()" style="margin-bottom:10px">
+        📤 PDFを添付してGmailで送信
+      </button>
+      <div id="send-status" style="font-size:11px;color:#64748b;text-align:center;min-height:16px"></div>
+    </div>
+
+    <!-- 請求書プレビュー -->
+    <div class="card" id="invoice-preview" style="padding:24px 18px"></div>
+  </div>
+
+  <!-- ===== 設定 ===== -->
+  <div id="tab-settings" class="hidden">
+    <div class="card">
+      <div style="font-weight:700;color:#1e293b;margin-bottom:16px;font-size:15px">基本情報</div>
+      <label class="lbl">自分の名前・屋号</label>
+      <input type="text" id="s-myName" style="margin-bottom:14px"/>
+      <label class="lbl">住所・連絡先</label>
+      <textarea id="s-myAddress" rows="3" style="margin-bottom:14px;resize:vertical"></textarea>
+      <label class="lbl">取引先名</label>
+      <input type="text" id="s-clientName" style="margin-bottom:14px"/>
+      <label class="lbl">取引先住所</label>
+      <textarea id="s-clientAddress" rows="2" style="margin-bottom:14px;resize:vertical"></textarea>
+      <label class="lbl">送信先メールアドレス（複数設定可）</label>
+      <div id="email-tags" style="min-height:36px;border:1.5px solid #cbd5e1;border-radius:8px;padding:6px 8px;margin-bottom:8px;display:flex;flex-wrap:wrap;align-items:center;background:white"></div>
+      <div style="display:flex;gap:8px;margin-bottom:4px">
+        <input type="text" id="email-input" placeholder="メールアドレスを入力してEnter" style="flex:1" onkeydown="handleEmailKey(event)"/>
+        <button onclick="addEmail()" style="padding:8px 14px;background:#1e40af;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:700;font-size:13px;white-space:nowrap">追加</button>
+      </div>
+      <div style="font-size:11px;color:#94a3b8;margin-bottom:4px">Enterまたは「追加」で追加。×で削除。</div>
+    </div>
+
+    <div class="card">
+      <div style="font-weight:700;color:#1e293b;margin-bottom:16px;font-size:15px">契約・報酬設定（すべて税込）</div>
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;margin-bottom:16px;font-size:12px;color:#1e40af;line-height:1.7">
+        <strong>清算幅契約</strong>：実働が範囲内なら月額固定。範囲外は1時間単位で加減算します。
+      </div>
+      <div class="row2" style="margin-bottom:14px">
+        <div><label class="lbl">清算幅・下限（時間）</label><input type="number" id="s-minHours"/></div>
+        <div><label class="lbl">清算幅・上限（時間）</label><input type="number" id="s-maxHours"/></div>
+      </div>
+      <div class="row2" style="margin-bottom:14px">
+        <div><label class="lbl">月額固定報酬（税込・円）</label><input type="number" id="s-monthlyFee"/></div>
+        <div><label class="lbl">超過／不足の時間単価（税込・円）</label><input type="number" id="s-hourlyRate"/></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="font-weight:700;color:#1e293b;margin-bottom:16px;font-size:15px">振込情報</div>
+      <label class="lbl">銀行名</label>
+      <input type="text" id="s-bankName" style="margin-bottom:14px"/>
+      <div class="row2" style="margin-bottom:14px">
+        <div><label class="lbl">支店名</label><input type="text" id="s-bankBranch"/></div>
+        <div><label class="lbl">口座種別</label>
+          <select id="s-bankType"><option value="普通">普通</option><option value="当座">当座</option></select>
+        </div>
+      </div>
+      <div class="row2" style="margin-bottom:14px">
+        <div><label class="lbl">口座番号</label><input type="text" id="s-bankNo"/></div>
+        <div><label class="lbl">口座名義（カナ）</label><input type="text" id="s-bankHolder"/></div>
+      </div>
+      <label class="lbl">振込期限（翌月何日払い・0=末日）</label>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+        <span style="font-size:13px;color:#64748b;white-space:nowrap">翌月</span>
+        <input type="number" id="s-payDay" min="0" max="31" style="width:80px;flex:none"/>
+        <span style="font-size:13px;color:#64748b;white-space:nowrap">日払い（0=末日）</span>
+      </div>
+      <button class="btn btn-blue" id="save-btn" onclick="saveSettings()">設定を保存</button>
+    </div>
+
+    <div class="card" style="border-left:4px solid #f59e0b;background:#fffbeb">
+      <div style="font-size:12px;color:#92400e;font-weight:700;margin-bottom:4px">⚠️ データについて</div>
+      <div style="font-size:12px;color:#78350f">データはこのブラウザのlocalStorageに保存されます。ブラウザのデータ消去で失われます。</div>
+    </div>
+  </div>
+
+</div><!-- /body -->
+
+<div id="toast"></div>
+
+<!-- 編集モーダル -->
+<div id="modal-overlay" onclick="closeModal(event)">
+  <div id="modal-box">
+    <div style="font-size:16px;font-weight:800;color:#1e293b;margin-bottom:18px">記録を編集</div>
+    <input type="hidden" id="edit-id"/>
+    <label class="lbl">出勤時刻</label>
+    <input type="datetime-local" id="edit-inTime" style="margin-bottom:14px"/>
+    <label class="lbl">退勤時刻</label>
+    <input type="datetime-local" id="edit-outTime" style="margin-bottom:14px"/>
+    <label class="lbl">休憩時間（分）</label>
+    <input type="number" id="edit-breakMin" value="60" style="margin-bottom:14px"/>
+    <label class="lbl">メモ</label>
+    <input type="text" id="edit-note" placeholder="作業内容など" style="margin-bottom:18px"/>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-blue" style="flex:1;padding:10px" onclick="saveEdit()">保存</button>
+      <button onclick="document.getElementById('modal-overlay').style.display='none'"
+        style="flex:1;padding:10px;border:1.5px solid #cbd5e1;border-radius:8px;background:white;font-size:14px;font-weight:700;cursor:pointer;color:#475569">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- 設定ガイドモーダル -->
+<div id="guide-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:60;display:none;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:white;border-radius:16px;padding:24px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto">
+    <div style="font-size:16px;font-weight:800;color:#1e293b;margin-bottom:16px">📖 Gmail API 設定手順</div>
+    <div style="font-size:13px;color:#334155;line-height:1.9">
+      <div style="margin-bottom:14px">
+        <strong><span class="step-badge">1</span>Google Cloud Console にアクセス</strong><br/>
+        <a href="https://console.cloud.google.com" target="_blank" style="color:#1e40af;font-size:12px">https://console.cloud.google.com</a>
+      </div>
+      <div style="margin-bottom:14px">
+        <strong><span class="step-badge">2</span>プロジェクトを作成</strong><br/>
+        「新しいプロジェクト」→ 任意の名前（例: 勤怠請求書）→ 作成
+      </div>
+      <div style="margin-bottom:14px">
+        <strong><span class="step-badge">3</span>Gmail API を有効化</strong><br/>
+        「APIとサービス」→「ライブラリ」→「Gmail API」→「有効にする」
+      </div>
+      <div style="margin-bottom:14px">
+        <strong><span class="step-badge">4</span>OAuth同意画面を設定</strong><br/>
+        「OAuth同意画面」→ 外部 → アプリ名・メール入力 → 保存<br/>
+        「テストユーザー」に自分のGmailアドレスを追加
+      </div>
+      <div style="margin-bottom:14px">
+        <strong><span class="step-badge">5</span>認証情報（クライアントID）を作成</strong><br/>
+        「認証情報」→「認証情報を作成」→「OAuthクライアントID」<br/>
+        アプリの種類：<strong>ウェブアプリケーション</strong><br/>
+        承認済みのJavaScript生成元に以下を追加：<br/>
+        <code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:11px">file://</code>（ローカルHTMLの場合）<br/>
+        または自分のサーバーURL
+      </div>
+      <div style="margin-bottom:14px">
+        <strong><span class="step-badge">6</span>クライアントIDをコピー</strong><br/>
+        作成後に表示される「クライアントID」（xxxx.apps.googleusercontent.com）をコピーして、設定欄に貼り付ける
+      </div>
+    </div>
+    <button class="btn btn-blue" style="width:100%;padding:10px;margin-top:8px" onclick="document.getElementById('guide-overlay').style.display='none'">閉じる</button>
+  </div>
+</div>
+
+<script>
+// ===== Google API =====
+const GMAIL_SCOPES = "https://www.googleapis.com/auth/gmail.send";
+let gapiInited = false;
+let gisInited = false;
+let tokenClient = null;
+let accessToken = null;
+
+// ===== 定数 =====
+const STORAGE_KEY = "attendance_v5";
+const SETTINGS_KEY = "attendance_settings_v5";
+
+// ===== ユーティリティ =====
+const toHHMM = d => d.toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"});
+const toDateStr = d => d.toLocaleDateString("ja-JP",{month:"2-digit",day:"2-digit",weekday:"short"});
+const minBetween = (s,e) => Math.round((new Date(e)-new Date(s))/60000);
+const fmtH = m => { const h=Math.floor(m/60),mm=m%60; return h+"h"+(mm>0?mm+"m":""); };
+const esc = s => String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const toLocalDT = iso => {
+  if(!iso) return "";
+  const d=new Date(iso),pad=n=>String(n).padStart(2,"0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+// ===== 状態 =====
+let records = [];
+let settings = {
+  myName:"",
+  myAddress:"",
+  clientName:"",
+  clientAddress:"",
+  clientEmails:[],
+  minHours:140, maxHours:180, monthlyFee:500000, hourlyRate:3750,
+  bankName:"",
+  bankBranch:"",
+  bankType:"普通",
+  bankNo:"",
+  bankHolder:"",
+  payDay:0,
+  gmailClientId:""
+};
+let clockedIn = null;
+
+// ===== ダミーデータ =====
+function generateDummyRecords(){
+  const recs=[],notes=["開発作業","ミーティング","資料作成","コードレビュー","テスト","設計","打ち合わせ",""];
+  [2,3,4,5,6,9,10,11,12,13,16,17,18,19,20,23,24,25,26,27,30].forEach(day=>{
+    const baseIn=new Date(2026,5,day,9,Math.floor(Math.random()*20));
+    const breakMin=60,workMin=480+Math.floor(Math.random()*60)-30;
+    recs.push({id:baseIn.getTime(),date:`2026-06-${String(day).padStart(2,"0")}`,
+      inTime:baseIn.toISOString(),
+      outTime:new Date(baseIn.getTime()+(workMin+breakMin)*60000).toISOString(),
+      breakMin,duration:workMin,note:notes[Math.floor(Math.random()*notes.length)]});
+  });
+  return recs;
+}
+
+// ===== 初期化 =====
+function init(){
+  const r=localStorage.getItem(STORAGE_KEY);
+  if(r){try{records=JSON.parse(r)}catch{}}
+  else{records=generateDummyRecords();localStorage.setItem(STORAGE_KEY,JSON.stringify(records));}
+  const s=localStorage.getItem(SETTINGS_KEY);
+  if(s){try{settings={...settings,...JSON.parse(s)}}catch{}}
+  else{localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));}
+  if(!Array.isArray(settings.clientEmails)) settings.clientEmails=settings.clientEmails?[settings.clientEmails]:[];
+  loadSettingsUI();
+  const now=new Date();
+  const thisMonth=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+  document.getElementById("rec-month").value=thisMonth;
+  document.getElementById("inv-month").value="2026-06";
+  setInterval(tickClock,1000); tickClock();
+  renderRecords(); renderInvoice();
+  // 保存済みクライアントIDがあればGAPI読み込み
+  if(settings.gmailClientId) loadGapiScripts(settings.gmailClientId);
+}
+
+// ===== 時計 =====
+function tickClock(){
+  const now=new Date();
+  document.getElementById("clock-display").textContent=now.toLocaleTimeString("ja-JP");
+  document.getElementById("date-display").textContent=now.toLocaleDateString("ja-JP",{year:"numeric",month:"long",day:"numeric",weekday:"long"});
+  if(clockedIn) document.getElementById("elapsed").textContent="経過: "+fmtH(minBetween(clockedIn.time,now.toISOString()));
+  renderToday();
+}
+
+// ===== タブ =====
+function switchTab(tab){
+  ["clock","records","invoice","settings"].forEach((t,i)=>{
+    document.getElementById("tab-"+t).classList.toggle("hidden",t!==tab);
+    document.querySelectorAll(".tab-btn")[i].classList.toggle("active",t===tab);
+  });
+  if(tab==="records") renderRecords();
+  if(tab==="invoice") renderInvoice();
+}
+
+// ===== 打刻 =====
+function clockIn(){
+  const note=document.getElementById("note-input").value;
+  clockedIn={time:new Date().toISOString(),note};
+  document.getElementById("note-input").value="";
+  document.getElementById("clock-in-card").classList.add("hidden");
+  document.getElementById("clock-out-card").classList.remove("hidden");
+  document.getElementById("clocked-in-time").textContent=toHHMM(new Date(clockedIn.time));
+  document.getElementById("clocked-in-note").textContent=note?"📝 "+note:"";
+  document.getElementById("working-badge").style.display="inline";
+}
+function clockOut(){
+  const outTime=new Date().toISOString();
+  const rawMin=minBetween(clockedIn.time,outTime),breakMin=60;
+  records.push({id:Date.now(),date:new Date(clockedIn.time).toISOString().slice(0,10),
+    inTime:clockedIn.time,outTime,breakMin,duration:Math.max(0,rawMin-breakMin),note:clockedIn.note});
+  persist(); clockedIn=null;
+  document.getElementById("clock-in-card").classList.remove("hidden");
+  document.getElementById("clock-out-card").classList.add("hidden");
+  document.getElementById("working-badge").style.display="none";
+}
+function renderToday(){
+  const today=new Date().toISOString().slice(0,10);
+  const tr=records.filter(r=>r.date===today);
+  const card=document.getElementById("today-card");
+  if(!tr.length){card.classList.add("hidden");return;}
+  card.classList.remove("hidden");
+  document.getElementById("today-list").innerHTML=
+    tr.map(r=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f1f5f9">
+      <span style="font-size:13px">${toHHMM(new Date(r.inTime))}〜${toHHMM(new Date(r.outTime))} 休憩${r.breakMin||0}分</span>
+      <span style="font-size:13px;color:#1e40af;font-weight:700">${fmtH(r.duration)}</span>
+    </div>`).join("")+
+    `<div style="text-align:right;margin-top:6px;font-weight:700;font-size:13px">合計: ${fmtH(tr.reduce((s,r)=>s+r.duration,0))}</div>`;
+}
+
+// ===== 記録（削除なし・編集のみ） =====
+function renderRecords(){
+  const month=document.getElementById("rec-month").value;
+  const recs=records.filter(r=>r.date.startsWith(month));
+  document.getElementById("records-empty").classList.toggle("hidden",recs.length>0);
+  document.getElementById("records-table-card").classList.toggle("hidden",recs.length===0);
+  if(!recs.length) return;
+  const totalMin=recs.reduce((s,r)=>s+r.duration,0);
+  document.getElementById("records-tbody").innerHTML=recs.map(r=>`
+    <tr>
+      <td class="nowrap" style="font-weight:600">${esc(toDateStr(new Date(r.inTime)))}</td>
+      <td class="nowrap">${esc(toHHMM(new Date(r.inTime)))}</td>
+      <td class="nowrap">${esc(toHHMM(new Date(r.outTime)))}</td>
+      <td>${r.breakMin||0}分</td>
+      <td class="nowrap" style="color:#1e40af;font-weight:700">${esc(fmtH(r.duration))}</td>
+      <td style="color:#64748b;font-size:11px">${esc(r.note||"-")}</td>
+      <td><button class="edit-btn" onclick="openEdit(${r.id})">編集</button></td>
+    </tr>`).join("");
+  document.getElementById("records-tfoot").innerHTML=`
+    <tr style="background:#f8fafc">
+      <td colspan="4" style="padding:8px;font-weight:700">合計実働</td>
+      <td style="padding:8px;font-weight:800;color:#1e40af">${esc(fmtH(totalMin))}</td>
+      <td colspan="2"></td>
+    </tr>`;
+}
+
+// ===== 編集 =====
+function openEdit(id){
+  const r=records.find(x=>x.id===id); if(!r) return;
+  document.getElementById("edit-id").value=id;
+  document.getElementById("edit-inTime").value=toLocalDT(r.inTime);
+  document.getElementById("edit-outTime").value=toLocalDT(r.outTime);
+  document.getElementById("edit-breakMin").value=r.breakMin||0;
+  document.getElementById("edit-note").value=r.note||"";
+  document.getElementById("modal-overlay").style.display="flex";
+}
+function closeModal(e){if(e.target===document.getElementById("modal-overlay"))document.getElementById("modal-overlay").style.display="none";}
+function saveEdit(){
+  const id=Number(document.getElementById("edit-id").value);
+  const inTime=new Date(document.getElementById("edit-inTime").value).toISOString();
+  const outTime=new Date(document.getElementById("edit-outTime").value).toISOString();
+  const breakMin=Number(document.getElementById("edit-breakMin").value)||0;
+  const note=document.getElementById("edit-note").value;
+  const rawMin=Math.round((new Date(outTime)-new Date(inTime))/60000);
+  records=records.map(r=>r.id===id?{...r,inTime,outTime,breakMin,duration:Math.max(0,rawMin-breakMin),note,date:inTime.slice(0,10)}:r);
+  persist(); renderRecords();
+  document.getElementById("modal-overlay").style.display="none";
+}
+
+// ===== 金額計算 =====
+function calcAmounts(month){
+  const recs=records.filter(r=>r.date.startsWith(month));
+  const totalMin=recs.reduce((s,r)=>s+r.duration,0);
+  const totalHours=totalMin/60;
+  const {minHours,maxHours,monthlyFee,hourlyRate}=settings;
+  let base=monthlyFee,adjust=0,adjustNote="";
+  if(totalHours<minHours){
+    const diff=minHours-totalHours;
+    adjust=-Math.round(diff*hourlyRate);
+    adjustNote=`不足 ${diff.toFixed(2)}h × ¥${hourlyRate.toLocaleString()} = -¥${Math.abs(adjust).toLocaleString()}`;
+  } else if(totalHours>maxHours){
+    const diff=totalHours-maxHours;
+    adjust=Math.round(diff*hourlyRate);
+    adjustNote=`超過 ${diff.toFixed(2)}h × ¥${hourlyRate.toLocaleString()} = +¥${adjust.toLocaleString()}`;
+  } else {
+    adjustNote=`清算幅内（${minHours}〜${maxHours}h）`;
+  }
+  return{recs,totalMin,totalHours,base,adjust,adjustNote,total:base+adjust};
+}
+
+// ===== 振込期限 =====
+function getDueDate(month){
+  const payDay=Number(settings.payDay)||0;
+  const d=new Date(month+"-01");
+  d.setMonth(d.getMonth()+2);
+  if(payDay===0) d.setDate(0);
+  else{d.setMonth(d.getMonth()-1);d.setDate(payDay);}
+  return d.toLocaleDateString("ja-JP");
+}
+
+// ===== 請求書レンダリング =====
+function renderInvoice(){
+  const month=document.getElementById("inv-month").value;
+  const calc=calcAmounts(month);
+  const {totalMin,totalHours,adjustNote,total}=calc;
+  const dueDate=getDueDate(month);
+  const emails=settings.clientEmails||[];
+  document.getElementById("mail-to-label").innerHTML=emails.length
+    ? emails.map(e=>`<span style="display:inline-block;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:2px 10px;margin:2px 2px;font-size:12px">${esc(e)}</span>`).join("")
+    : "（設定でメールアドレスを登録）";
+  const adjColor=totalHours<settings.minHours?"#dc2626":totalHours>settings.maxHours?"#ea580c":"#16a34a";
+  document.getElementById("amount-summary").innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <div>
+        <div style="font-size:11px;color:#64748b;margin-bottom:3px">実働時間</div>
+        <div style="font-size:20px;font-weight:800;color:#1e293b">${fmtH(totalMin)}</div>
+        <div style="font-size:11px;color:${adjColor};margin-top:2px">${adjustNote}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:11px;color:#64748b;margin-bottom:3px">ご請求金額（税込）</div>
+        <div style="font-size:26px;font-weight:800;color:#1e40af">¥${total.toLocaleString()}</div>
+      </div>
+    </div>`;
+  const detailRows=calc.recs.map(r=>`
+    <tr>
+      <td class="nowrap">${esc(toDateStr(new Date(r.inTime)))}</td>
+      <td class="center">${esc(toHHMM(new Date(r.inTime)))}</td>
+      <td class="center">${esc(toHHMM(new Date(r.outTime)))}</td>
+      <td class="center" style="color:#64748b">${r.breakMin||0}分</td>
+      <td class="right" style="font-weight:600">${esc(fmtH(r.duration))}</td>
+      <td style="color:#64748b">${esc(r.note||"—")}</td>
+    </tr>`).join("");
+  document.getElementById("invoice-preview").innerHTML=buildInvoiceBody(month,calc,dueDate,detailRows);
+}
+
+function buildInvoiceBody(month,calc,dueDate,detailRows){
+  const {recs,totalMin,totalHours,base,adjust,adjustNote,total}=calc;
+  return `
+    <div style="font-size:20px;font-weight:800;color:#1e293b;border-bottom:3px solid #1e40af;padding-bottom:10px;margin-bottom:18px;letter-spacing:3px">請　求　書</div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:16px;gap:10px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:11px;color:#64748b;margin-bottom:2px">請求先</div>
+        <div style="font-size:15px;font-weight:700;color:#1e293b">${esc(settings.clientName||"")} 御中</div>
+        <div style="font-size:11px;color:#475569;margin-top:2px;white-space:pre-line">${esc(settings.clientAddress)}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:11px;color:#64748b;margin-bottom:2px">発行者</div>
+        <div style="font-size:13px;font-weight:700;color:#1e293b">${esc(settings.myName||"")}</div>
+        <div style="font-size:11px;color:#475569;margin-top:2px;white-space:pre-line;text-align:right">${esc(settings.myAddress)}</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;margin-bottom:16px;font-size:11px;color:#64748b;flex-wrap:wrap">
+      <span>発行日: <strong style="color:#1e293b">${new Date().toLocaleDateString("ja-JP")}</strong></span>
+      <span>対象月: <strong style="color:#1e293b">${month.replace("-","年")}月</strong></span>
+    </div>
+    <div style="background:#eff6ff;border-radius:10px;padding:12px 16px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:13px;color:#1e40af;font-weight:600">ご請求金額（税込）</span>
+      <span style="font-size:22px;font-weight:800;color:#1e40af">¥${total.toLocaleString()}</span>
+    </div>
+    <table style="margin-bottom:12px;font-size:12px">
+      <thead><tr><th style="width:45%">品目</th><th class="right">時間</th><th class="right">金額（税込）</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>月額固定報酬（${month.replace("-","年")}月分）</td>
+          <td class="right">${totalHours.toFixed(2)}h</td>
+          <td class="right" style="font-weight:700">¥${base.toLocaleString()}</td>
+        </tr>
+        ${adjust!==0?`<tr>
+          <td style="color:#64748b;font-size:11px">${adjustNote}</td>
+          <td></td>
+          <td class="right" style="font-weight:700;color:${adjust>0?"#16a34a":"#dc2626"}">${adjust>0?"+":""}¥${adjust.toLocaleString()}</td>
+        </tr>`:""}
+      </tbody>
+      <tfoot>
+        <tr style="border-top:2px solid #1e40af">
+          <td colspan="2" class="right" style="font-weight:800;font-size:14px">合計（税込）</td>
+          <td class="right" style="font-weight:800;font-size:14px;color:#1e40af">¥${total.toLocaleString()}</td>
+        </tr>
+      </tfoot>
+    </table>
+    ${recs.length>0?`
+    <div style="font-size:11px;font-weight:700;color:#475569;border-bottom:2px solid #e2e8f0;padding-bottom:5px;margin-top:16px">勤務明細（${recs.length}日）</div>
+    <table style="font-size:11px">
+      <thead><tr>
+        <th>日付</th><th class="center">出勤</th><th class="center">退勤</th>
+        <th class="center">休憩</th><th class="right">実働</th><th>作業内容</th>
+      </tr></thead>
+      <tbody>${detailRows}</tbody>
+      <tfoot><tr style="border-top:1.5px solid #cbd5e1;background:#f8fafc">
+        <td colspan="4" style="font-weight:700">合計実働時間</td>
+        <td class="right" style="font-weight:800;color:#1e40af">${esc(fmtH(totalMin))}</td>
+        <td></td>
+      </tr></tfoot>
+    </table>`:""}
+    <div style="margin-top:20px;background:#f8fafc;border-radius:8px;padding:12px 16px;font-size:12px">
+      <div style="font-weight:700;color:#1e293b;margin-bottom:6px">振込先</div>
+      <div style="color:#334155;line-height:1.9">
+        ${esc(settings.bankName)}　${esc(settings.bankBranch)}<br/>
+        ${esc(settings.bankType)}　${esc(settings.bankNo)}<br/>
+        ${esc(settings.bankHolder)}
+      </div>
+    </div>
+    <div style="margin-top:12px;font-size:11px;color:#475569;border-top:1px solid #e2e8f0;padding-top:10px">
+      お振込期限: <strong>${dueDate}</strong>
+    </div>`;
+}
+
+// ===== Gmail API =====
+function loadGapiScripts(clientId){
+  if(document.getElementById("gapi-script")) return;
+  const s1=document.createElement("script");
+  s1.id="gapi-script"; s1.src="https://apis.google.com/js/api.js";
+  s1.onload=()=>{
+    gapi.load("client",async()=>{
+      await gapi.client.init({discoveryDocs:["https://www.googleapis.com/discovery/v1/apis/gmail/v1/rest"]});
+      gapiInited=true; maybeEnableButtons();
+    });
+  };
+  document.body.appendChild(s1);
+  const s2=document.createElement("script");
+  s2.src="https://accounts.google.com/gsi/client";
+  s2.onload=()=>{
+    tokenClient=google.accounts.oauth2.initTokenClient({
+      client_id:clientId,
+      scope:GMAIL_SCOPES,
+      callback:""
+    });
+    gisInited=true; maybeEnableButtons();
+  };
+  document.body.appendChild(s2);
+}
+
+function maybeEnableButtons(){
+  if(gapiInited && gisInited){
+    // アクセストークンが既にあれば接続済み表示
+    if(accessToken){
+      showConnected();
+    }
+  }
+}
+
+function connectGmailAPI(){
+  const clientId=document.getElementById("gmail-client-id").value.trim();
+  if(!clientId){showToast("クライアントIDを入力してください");return;}
+  settings.gmailClientId=clientId;
+  localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));
+  loadGapiScripts(clientId);
+  // スクリプト読み込み後に認証
+  setTimeout(()=>requestGmailAuth(),1500);
+}
+
+function requestGmailAuth(){
+  if(!tokenClient){showToast("しばらく待ってから再試行してください");return;}
+  tokenClient.callback=async(resp)=>{
+    if(resp.error){showToast("認証に失敗しました: "+resp.error);return;}
+    accessToken=resp.access_token;
+    gapi.client.setToken({access_token:accessToken});
+    showConnected();
+    showToast("✅ Gmailに接続しました！");
+  };
+  tokenClient.requestAccessToken({prompt:"consent"});
+}
+
+function showConnected(){
+  document.getElementById("gmail-api-setup").classList.add("hidden");
+  document.getElementById("gmail-connected").classList.remove("hidden");
+  // ログインユーザー取得
+  if(accessToken){
+    fetch("https://www.googleapis.com/oauth2/v3/userinfo",{
+      headers:{Authorization:`Bearer ${accessToken}`}
+    }).then(r=>r.json()).then(d=>{
+      document.getElementById("gmail-user-email").textContent=d.email||"";
+    }).catch(()=>{});
+  }
+}
+
+function disconnectGmail(){
+  if(accessToken) google.accounts.oauth2.revoke(accessToken,()=>{});
+  accessToken=null;
+  document.getElementById("gmail-api-setup").classList.remove("hidden");
+  document.getElementById("gmail-connected").classList.add("hidden");
+  showToast("Gmailの接続を切断しました");
+}
+
+// ===== PDF生成（Base64） =====
+async function generatePDFBase64(month,calc,dueDate){
+  const detailRows=calc.recs.map(r=>`
+    <tr>
+      <td>${toDateStr(new Date(r.inTime))}</td>
+      <td style="text-align:center">${toHHMM(new Date(r.inTime))}</td>
+      <td style="text-align:center">${toHHMM(new Date(r.outTime))}</td>
+      <td style="text-align:center">${r.breakMin||0}分</td>
+      <td style="text-align:right;font-weight:600">${fmtH(r.duration)}</td>
+      <td style="color:#555">${r.note||"—"}</td>
+    </tr>`).join("");
+  const iframe=document.createElement("iframe");
+  iframe.style.cssText="position:fixed;top:-9999px;left:-9999px;width:794px;border:none;";
+  document.body.appendChild(iframe);
+  const doc=iframe.contentDocument;
+  doc.open();
+  doc.write(`<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Hiragino Sans','Meiryo',sans-serif;padding:40px 48px;font-size:12px;color:#1e293b;width:794px}
+table{width:100%;border-collapse:collapse;margin-bottom:10px}
+th{background:#f8fafc;padding:6px 8px;font-size:10px;color:#555;border-bottom:2px solid #ddd;text-align:left}
+td{padding:6px 8px;font-size:11px;border-bottom:1px solid #eee;vertical-align:middle}
+.right{text-align:right}.center{text-align:center}
+</style></head><body>
+${buildInvoiceBody(month,calc,dueDate,detailRows)}
+</body></html>`);
+  doc.close();
+  await new Promise(r=>setTimeout(r,700));
+  const canvas=await html2canvas(doc.body,{scale:2,useCORS:true,width:794});
+  document.body.removeChild(iframe);
+  const{jsPDF}=window.jspdf;
+  const pdf=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+  const imgW=210,imgH=canvas.height*(210/canvas.width);
+  let y=0;
+  while(y<imgH){
+    if(y>0) pdf.addPage();
+    pdf.addImage(canvas.toDataURL("image/jpeg",0.95),"JPEG",0,-y,imgW,imgH);
+    y+=297;
+  }
+  return pdf.output("datauristring").split(",")[1]; // base64
+}
+
+// ===== Gmail API送信 =====
+async function sendWithGmailAPI(){
+  if(!accessToken){
+    if(!settings.gmailClientId){
+      showToast("先にGmail APIのクライアントIDを設定してください"); return;
+    }
+    requestGmailAuth(); return;
+  }
+  const btn=document.getElementById("send-btn");
+  const status=document.getElementById("send-status");
+  btn.disabled=true; btn.textContent="⏳ PDF生成中...";
+  status.textContent=""; status.style.color="#64748b";
+  try{
+    const month=document.getElementById("inv-month").value;
+    const calc=calcAmounts(month);
+    const dueDate=getDueDate(month);
+    const {total}=calc;
+
+    // PDF生成
+    status.textContent="PDFを生成しています...";
+    const pdfBase64=await generatePDFBase64(month,calc,dueDate);
+    const filename=`請求書_${month}_${settings.clientName||"取引先"}.pdf`;
+
+    // メール本文
+    const to=(settings.clientEmails||[]).join(",");
+    const subject=`【請求書】${month.replace("-","年")}月分 - ${settings.myName}`;
+    const body=
+`${settings.clientName} 御中
+
+お世話になっております。${settings.myName}です。
+
+${month.replace("-","年")}月分の業務委託費についてご請求申し上げます。
+
+■ご請求金額（税込）
+　¥${total.toLocaleString()}
+
+■振込先
+　${settings.bankName}　${settings.bankBranch}
+　${settings.bankType}　${settings.bankNo}
+　${settings.bankHolder}
+
+■お振込期限
+　${dueDate}
+
+ご確認のほどよろしくお願いいたします。
+
+---
+${settings.myName}
+${settings.myAddress}`;
+
+    // RFC 2822 形式でMIMEメッセージ構築
+    status.textContent="メールを送信しています...";
+    const boundary="==BOUNDARY_"+Date.now();
+    const mime=[
+      `To: ${to}`,
+      `Subject: =?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=`,
+      "MIME-Version: 1.0",
+      `Content-Type: multipart/mixed; boundary="${boundary}"`,
+      "",
+      `--${boundary}`,
+      "Content-Type: text/plain; charset=UTF-8",
+      "Content-Transfer-Encoding: base64",
+      "",
+      btoa(unescape(encodeURIComponent(body))),
+      "",
+      `--${boundary}`,
+      `Content-Type: application/pdf; name="${filename}"`,
+      "Content-Transfer-Encoding: base64",
+      `Content-Disposition: attachment; filename="${filename}"`,
+      "",
+      pdfBase64,
+      "",
+      `--${boundary}--`
+    ].join("\r\n");
+
+    // base64url エンコード
+    const encoded=btoa(unescape(encodeURIComponent(mime)))
+      .replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+
+    const resp=await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send",{
+      method:"POST",
+      headers:{"Authorization":`Bearer ${accessToken}`,"Content-Type":"application/json"},
+      body:JSON.stringify({raw:encoded})
+    });
+    if(!resp.ok){
+      const err=await resp.json();
+      throw new Error(err.error?.message||resp.statusText);
+    }
+    status.textContent="✅ 送信完了！";
+    status.style.color="#16a34a";
+    showToast(`✅ ${to} に請求書PDFを添付して送信しました`);
+  }catch(e){
+    console.error(e);
+    status.textContent="❌ 送信失敗: "+e.message;
+    status.style.color="#dc2626";
+    showToast("送信に失敗しました: "+e.message);
+  }
+  btn.disabled=false; btn.textContent="📤 PDFを添付してGmailで送信";
+}
+
+function showSetupGuide(){document.getElementById("guide-overlay").style.display="flex";}
+
+// ===== メールタグ =====
+function renderEmailTags(){
+  const container=document.getElementById("email-tags");
+  container.innerHTML=(settings.clientEmails||[]).map((email,i)=>
+    `<span class="email-tag">${esc(email)}<button onclick="removeEmail(${i})" title="削除">×</button></span>`
+  ).join("");
+}
+function handleEmailKey(e){if(e.key==="Enter"){e.preventDefault();addEmail();}}
+function addEmail(){
+  const input=document.getElementById("email-input");
+  const val=input.value.trim();
+  if(!val) return;
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)){showToast("正しいメールアドレスを入力してください");return;}
+  if(settings.clientEmails.includes(val)){showToast("すでに追加済みです");return;}
+  settings.clientEmails.push(val);
+  input.value="";
+  renderEmailTags();
+}
+function removeEmail(i){settings.clientEmails.splice(i,1);renderEmailTags();}
+
+// ===== 設定 =====
+function loadSettingsUI(){
+  ["myName","myAddress","clientName","clientAddress",
+   "bankName","bankBranch","bankType","bankNo","bankHolder"].forEach(k=>{
+    const el=document.getElementById("s-"+k); if(el) el.value=settings[k]||"";
+  });
+  ["minHours","maxHours","monthlyFee","hourlyRate","payDay"].forEach(k=>{
+    const el=document.getElementById("s-"+k); if(el) el.value=settings[k]||"";
+  });
+  if(!Array.isArray(settings.clientEmails)) settings.clientEmails=[];
+  renderEmailTags();
+  if(settings.gmailClientId) document.getElementById("gmail-client-id").value=settings.gmailClientId;
+}
+function saveSettings(){
+  const v=id=>document.getElementById(id)?.value||"";
+  const n=id=>Number(document.getElementById(id)?.value)||0;
+  settings={
+    ...settings,
+    myName:v("s-myName"), myAddress:v("s-myAddress"),
+    clientName:v("s-clientName"), clientAddress:v("s-clientAddress"),
+    minHours:n("s-minHours"), maxHours:n("s-maxHours"),
+    monthlyFee:n("s-monthlyFee"), hourlyRate:n("s-hourlyRate"),
+    bankName:v("s-bankName"), bankBranch:v("s-bankBranch"), bankType:v("s-bankType"),
+    bankNo:v("s-bankNo"), bankHolder:v("s-bankHolder"), payDay:n("s-payDay"),
+  };
+  localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));
+  const btn=document.getElementById("save-btn");
+  btn.textContent="✓ 保存しました";
+  setTimeout(()=>btn.textContent="設定を保存",2500);
+  renderInvoice();
+}
+
+function persist(){
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(records));
+  renderRecords(); renderInvoice();
+}
+function showToast(msg,ms=5000){
+  const t=document.getElementById("toast");
+  t.textContent=msg; t.style.display="block";
+  setTimeout(()=>t.style.display="none",ms);
+}
+
+init();
+</script>
+</body>
+</html>
