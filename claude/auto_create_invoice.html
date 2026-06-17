@@ -345,14 +345,12 @@ async function toggleAuth(){
 }
 
 async function saveToFirestore(){
-  if(!currentUser){ showToast("⚠️ 未ログイン"); return; }
-  showToast("保存中... records件数: "+records.length);
+  if(!currentUser) return;
   try{
     await db.collection("users").doc(currentUser.uid).set({records, settings, updatedAt: firebase.firestore.FieldValue.serverTimestamp()});
     const el=document.getElementById("fb-sync-status");
     if(el) el.textContent="最終保存: "+new Date().toLocaleTimeString("ja-JP");
-    showToast("✅ Firestore保存完了 "+records.length+"件");
-  } catch(e){ showToast("❌ 保存失敗: "+e.message); }
+  } catch(e){ showToast("保存失敗: "+e.message); }
 }
 
 async function loadFromFirestore(){
