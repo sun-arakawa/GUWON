@@ -252,10 +252,6 @@ td{padding:8px;font-size:12px;border-bottom:1px solid #f1f5f9;vertical-align:mid
       </div>
     </div>
 
-<div class="card" style="border-left:4px solid #f59e0b;background:#fffbeb">
-      <div style="font-size:12px;color:#92400e;font-weight:700;margin-bottom:4px">⚠️ データについて</div>
-      <div style="font-size:12px;color:#78350f">未ログイン時はlocalStorageに保存されます。ブラウザのデータ消去で失われます。</div>
-    </div>
   </div>
 
 </div><!-- /body -->
@@ -470,7 +466,9 @@ function clockIn(){
 function clockOut(){
   const outTime=new Date().toISOString();
   const rawMin=minBetween(clockedIn.time,outTime),breakMin=60;
-  records.push({id:Date.now(),date:new Date(clockedIn.time).toISOString().slice(0,10),
+  const inD=new Date(clockedIn.time);
+  const localDate=`${inD.getFullYear()}-${String(inD.getMonth()+1).padStart(2,"0")}-${String(inD.getDate()).padStart(2,"0")}`;
+  records.push({id:Date.now(),date:localDate,
     inTime:clockedIn.time,outTime,breakMin,duration:Math.max(0,rawMin-breakMin),note:clockedIn.note});
   persist(); clockedIn=null;
   document.getElementById("clock-in-card").classList.remove("hidden");
@@ -478,7 +476,8 @@ function clockOut(){
   document.getElementById("working-badge").style.display="none";
 }
 function renderToday(){
-  const today=new Date().toISOString().slice(0,10);
+  const now=new Date();
+  const today=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
   const tr=records.filter(r=>r.date===today);
   const card=document.getElementById("today-card");
   if(!tr.length){card.classList.add("hidden");return;}
