@@ -6,6 +6,9 @@
 <title>勤怠・請求書管理 - GUWON</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Hiragino Sans','Meiryo',sans-serif;background:#f0f4f8;min-height:100vh}
@@ -47,19 +50,33 @@ td{padding:8px;font-size:12px;border-bottom:1px solid #f1f5f9;vertical-align:mid
 .email-tag{display:inline-flex;align-items:center;gap:4px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:20px;padding:3px 10px;font-size:12px;color:#1e40af;margin:3px}
 .email-tag button{background:none;border:none;cursor:pointer;color:#94a3b8;font-size:14px;padding:0;line-height:1}
 .email-tag button:hover{color:#ef4444}
-/* Gmail API セクション */
-#gmail-api-setup{background:#fffbeb;border:1.5px solid #fcd34d;border-radius:10px;padding:16px;margin-bottom:12px}
-#gmail-api-setup.connected{background:#f0fdf4;border-color:#86efac}
-.step-badge{display:inline-block;background:#1e40af;color:white;border-radius:50%;width:20px;height:20px;text-align:center;line-height:20px;font-size:11px;font-weight:700;margin-right:6px}
 </style>
 </head>
 <body>
 
-<div id="header">
+<!-- ===== ログイン画面 ===== -->
+<div id="login-screen" style="position:fixed;inset:0;background:#f0f4f8;z-index:100;display:flex;align-items:center;justify-content:center;padding:24px">
+  <div style="background:white;border-radius:20px;box-shadow:0 4px 24px rgba(0,0,0,.1);padding:40px 32px;width:100%;max-width:360px;text-align:center">
+    <div style="font-size:40px;margin-bottom:12px">🕐</div>
+    <div style="font-size:20px;font-weight:800;color:#1e293b;margin-bottom:4px">勤怠・請求書管理</div>
+    <div style="font-size:12px;color:#94a3b8;margin-bottom:32px">GUWON</div>
+    <button onclick="toggleAuth()" style="width:100%;padding:14px;border:1.5px solid #e2e8f0;border-radius:12px;background:white;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;font-size:15px;font-weight:700;color:#1e293b;transition:background .15s" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
+      <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.2l6.7-6.7C35.8 2.3 30.3 0 24 0 14.7 0 6.7 5.4 2.7 13.3l7.8 6.1C12.5 13 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 6.9-10.1 6.9-17z"/><path fill="#FBBC05" d="M10.5 28.6A14.8 14.8 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6l-7.8-6.1A23.8 23.8 0 0 0 0 24c0 3.9.9 7.5 2.7 10.7l7.8-6.1z"/><path fill="#34A853" d="M24 48c6.3 0 11.6-2.1 15.5-5.7l-7.5-5.8c-2.1 1.4-4.8 2.3-8 2.3-6.2 0-11.5-4.2-13.4-9.9l-7.8 6.1C6.7 42.6 14.7 48 24 48z"/></svg>
+      Googleでログイン
+    </button>
+    <div id="login-status" style="font-size:12px;color:#94a3b8;margin-top:16px;min-height:18px"></div>
+  </div>
+</div>
+
+<div id="header" style="display:none">
   <div id="header-inner">
     <div id="app-title">🕐 勤怠・請求書管理
-      <span style="font-size:12px;color:#64748b;font-weight:400">v1.1.1</span>
+      <span style="font-size:12px;color:#64748b;font-weight:400">v1.2.0</span>
       <span id="working-badge">● 勤務中</span>
+      <span id="auth-status" style="margin-left:auto;font-size:12px;display:flex;align-items:center;gap:8px">
+        <span id="auth-user" style="color:#64748b;font-weight:400"></span>
+        <button id="auth-btn" onclick="toggleAuth()" style="font-size:11px;font-weight:700;padding:3px 10px;border:1.5px solid #cbd5e1;border-radius:20px;background:white;cursor:pointer;color:#475569">ログイン</button>
+      </span>
     </div>
     <div id="tabs">
       <button class="tab-btn active" onclick="switchTab('clock')">⏱ 打刻</button>
@@ -70,7 +87,7 @@ td{padding:8px;font-size:12px;border-bottom:1px solid #f1f5f9;vertical-align:mid
   </div>
 </div>
 
-<div id="body">
+<div id="body" style="display:none">
 
   <!-- ===== 打刻 ===== -->
   <div id="tab-clock">
@@ -133,35 +150,6 @@ td{padding:8px;font-size:12px;border-bottom:1px solid #f1f5f9;vertical-align:mid
     <div class="card">
       <div style="font-size:14px;font-weight:800;color:#1e293b;margin-bottom:12px">📧 Gmail送信</div>
 
-      <!-- API接続状態 -->
-      <div id="gmail-api-setup">
-        <div style="font-size:12px;font-weight:700;color:#92400e;margin-bottom:10px">⚙️ Gmail API 初期設定</div>
-        <div style="font-size:11px;color:#78350f;line-height:1.7;margin-bottom:10px">
-          <span class="step-badge">1</span>Google Cloud Console でクライアントIDを取得<br/>
-          <span class="step-badge">2</span>以下に貼り付けて「接続する」をクリック<br/>
-          <span class="step-badge">3</span>Googleアカウントでログイン承認（初回のみ）
-        </div>
-        <div style="margin-bottom:8px">
-          <label class="lbl">Google OAuth クライアントID</label>
-          <input type="text" id="gmail-client-id" placeholder="xxxx.apps.googleusercontent.com" style="font-size:12px"/>
-        </div>
-        <div style="display:flex;gap:8px;margin-top:10px">
-          <button class="btn btn-blue" style="flex:1;padding:9px" onclick="connectGmailAPI()">🔗 Googleアカウントに接続する</button>
-          <button class="btn btn-gray" style="padding:9px 14px" onclick="showSetupGuide()">📖 設定手順</button>
-        </div>
-      </div>
-
-      <!-- 接続済み表示 -->
-      <div id="gmail-connected" class="hidden" style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:12px;margin-bottom:12px">
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <div>
-            <div style="font-size:12px;font-weight:700;color:#166534">✅ Gmail接続済み</div>
-            <div id="gmail-user-email" style="font-size:11px;color:#166534;margin-top:2px"></div>
-          </div>
-          <button class="btn btn-gray" style="padding:6px 12px;font-size:12px" onclick="disconnectGmail()">切断</button>
-        </div>
-      </div>
-
       <!-- 送信先 -->
       <div style="margin-bottom:14px">
         <div style="font-size:11px;color:#64748b;margin-bottom:4px">送信先:</div>
@@ -169,9 +157,14 @@ td{padding:8px;font-size:12px;border-bottom:1px solid #f1f5f9;vertical-align:mid
       </div>
 
       <!-- 送信ボタン -->
-      <button class="btn btn-sky" id="send-btn" onclick="sendWithGmailAPI()" style="margin-bottom:10px">
-        📤 PDFを添付してGmailで送信
-      </button>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <button class="btn btn-sky" id="send-btn" onclick="sendWithGmailAPI()" style="flex:1">
+          📤 PDFを添付してGmailで送信
+        </button>
+        <button class="btn btn-gray" onclick="downloadPDF()" style="padding:10px 14px">
+          ⬇️ PDF保存
+        </button>
+      </div>
       <div id="send-status" style="font-size:11px;color:#64748b;text-align:center;min-height:16px"></div>
     </div>
 
@@ -238,9 +231,30 @@ td{padding:8px;font-size:12px;border-bottom:1px solid #f1f5f9;vertical-align:mid
       <button class="btn btn-blue" id="save-btn" onclick="saveSettings()">設定を保存</button>
     </div>
 
-    <div class="card" style="border-left:4px solid #f59e0b;background:#fffbeb">
+    <div class="card" id="firebase-login-card">
+      <div style="font-weight:700;color:#1e293b;margin-bottom:12px;font-size:15px">☁️ クラウド保存（Firebase）</div>
+      <div id="fb-logged-out">
+        <div style="font-size:12px;color:#64748b;line-height:1.7;margin-bottom:14px">Googleアカウントでログインするとデータがクラウドに自動保存され、どの端末からでも同期されます。</div>
+        <button class="btn btn-blue" style="width:100%;padding:12px;display:flex;align-items:center;justify-content:center;gap:8px" onclick="toggleAuth()">
+          <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.2l6.7-6.7C35.8 2.3 30.3 0 24 0 14.7 0 6.7 5.4 2.7 13.3l7.8 6.1C12.5 13 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 6.9-10.1 6.9-17z"/><path fill="#FBBC05" d="M10.5 28.6A14.8 14.8 0 0 1 9.5 24c0-1.6.3-3.2.8-4.6l-7.8-6.1A23.8 23.8 0 0 0 0 24c0 3.9.9 7.5 2.7 10.7l7.8-6.1z"/><path fill="#34A853" d="M24 48c6.3 0 11.6-2.1 15.5-5.7l-7.5-5.8c-2.1 1.4-4.8 2.3-8 2.3-6.2 0-11.5-4.2-13.4-9.9l-7.8 6.1C6.7 42.6 14.7 48 24 48z"/></svg>
+          Googleでログイン
+        </button>
+      </div>
+      <div id="fb-logged-in" class="hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;background:#f0fdf4;border-radius:8px;padding:12px">
+          <div>
+            <div style="font-size:12px;font-weight:700;color:#166534">✅ ログイン中</div>
+            <div id="fb-user-email" style="font-size:11px;color:#166534;margin-top:2px"></div>
+          </div>
+          <button class="btn btn-gray" style="padding:6px 12px;font-size:12px" onclick="toggleAuth()">ログアウト</button>
+        </div>
+        <div id="fb-sync-status" style="font-size:11px;color:#64748b;margin-top:8px;text-align:center;min-height:16px"></div>
+      </div>
+    </div>
+
+<div class="card" style="border-left:4px solid #f59e0b;background:#fffbeb">
       <div style="font-size:12px;color:#92400e;font-weight:700;margin-bottom:4px">⚠️ データについて</div>
-      <div style="font-size:12px;color:#78350f">データはこのブラウザのlocalStorageに保存されます。ブラウザのデータ消去で失われます。</div>
+      <div style="font-size:12px;color:#78350f">未ログイン時はlocalStorageに保存されます。ブラウザのデータ消去で失われます。</div>
     </div>
   </div>
 
@@ -269,52 +283,96 @@ td{padding:8px;font-size:12px;border-bottom:1px solid #f1f5f9;vertical-align:mid
   </div>
 </div>
 
-<!-- 設定ガイドモーダル -->
-<div id="guide-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:60;display:none;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)this.style.display='none'">
-  <div style="background:white;border-radius:16px;padding:24px;width:100%;max-width:500px;max-height:90vh;overflow-y:auto">
-    <div style="font-size:16px;font-weight:800;color:#1e293b;margin-bottom:16px">📖 Gmail API 設定手順</div>
-    <div style="font-size:13px;color:#334155;line-height:1.9">
-      <div style="margin-bottom:14px">
-        <strong><span class="step-badge">1</span>Google Cloud Console にアクセス</strong><br/>
-        <a href="https://console.cloud.google.com" target="_blank" style="color:#1e40af;font-size:12px">https://console.cloud.google.com</a>
-      </div>
-      <div style="margin-bottom:14px">
-        <strong><span class="step-badge">2</span>プロジェクトを作成</strong><br/>
-        「新しいプロジェクト」→ 任意の名前（例: 勤怠請求書）→ 作成
-      </div>
-      <div style="margin-bottom:14px">
-        <strong><span class="step-badge">3</span>Gmail API を有効化</strong><br/>
-        「APIとサービス」→「ライブラリ」→「Gmail API」→「有効にする」
-      </div>
-      <div style="margin-bottom:14px">
-        <strong><span class="step-badge">4</span>OAuth同意画面を設定</strong><br/>
-        「OAuth同意画面」→ 外部 → アプリ名・メール入力 → 保存<br/>
-        「テストユーザー」に自分のGmailアドレスを追加
-      </div>
-      <div style="margin-bottom:14px">
-        <strong><span class="step-badge">5</span>認証情報（クライアントID）を作成</strong><br/>
-        「認証情報」→「認証情報を作成」→「OAuthクライアントID」<br/>
-        アプリの種類：<strong>ウェブアプリケーション</strong><br/>
-        承認済みのJavaScript生成元に以下を追加：<br/>
-        <code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:11px">file://</code>（ローカルHTMLの場合）<br/>
-        または自分のサーバーURL
-      </div>
-      <div style="margin-bottom:14px">
-        <strong><span class="step-badge">6</span>クライアントIDをコピー</strong><br/>
-        作成後に表示される「クライアントID」（xxxx.apps.googleusercontent.com）をコピーして、設定欄に貼り付ける
-      </div>
-    </div>
-    <button class="btn btn-blue" style="width:100%;padding:10px;margin-top:8px" onclick="document.getElementById('guide-overlay').style.display='none'">閉じる</button>
-  </div>
-</div>
 
 <script>
-// ===== Google API =====
-const GMAIL_SCOPES = "https://www.googleapis.com/auth/gmail.send";
-let gapiInited = false;
-let gisInited = false;
-let tokenClient = null;
+// ===== Firebase =====
+const firebaseConfig = {
+  apiKey: "AIzaSyBTjf6RA2eczNGHKPOlOjY19jkesZXZzYk",
+  authDomain: "autocreateinvoice-6a3e7.firebaseapp.com",
+  projectId: "autocreateinvoice-6a3e7",
+  storageBucket: "autocreateinvoice-6a3e7.firebasestorage.app",
+  messagingSenderId: "673641397839",
+  appId: "1:673641397839:web:1f9bd3581d904fc424b43a"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+let currentUser = null;
 let accessToken = null;
+
+auth.onAuthStateChanged(async user => {
+  currentUser = user;
+  if(user){
+    // ログイン画面を隠してメイン画面を表示
+    document.getElementById("login-screen").style.display = "none";
+    document.getElementById("header").style.display = "block";
+    document.getElementById("body").style.display = "block";
+    // ヘッダー・設定タブのユーザー情報更新
+    document.getElementById("auth-user").textContent = user.email;
+    document.getElementById("auth-btn").textContent = "ログアウト";
+    document.getElementById("fb-logged-out").classList.add("hidden");
+    document.getElementById("fb-logged-in").classList.remove("hidden");
+    document.getElementById("fb-user-email").textContent = user.email;
+    await loadFromFirestore();
+    loadSettingsUI();
+    renderRecords(); renderInvoice();
+  } else {
+    // ログイン画面を表示してメイン画面を隠す
+    document.getElementById("login-screen").style.display = "flex";
+    document.getElementById("header").style.display = "none";
+    document.getElementById("body").style.display = "none";
+    document.getElementById("auth-user").textContent = "";
+    document.getElementById("auth-btn").textContent = "ログイン";
+    document.getElementById("fb-logged-out").classList.remove("hidden");
+    document.getElementById("fb-logged-in").classList.add("hidden");
+    accessToken = null;
+  }
+});
+
+async function toggleAuth(){
+  if(currentUser){
+    await auth.signOut();
+    showToast("ログアウトしました");
+  } else {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    provider.addScope("https://www.googleapis.com/auth/gmail.send");
+    try{
+      const result = await auth.signInWithPopup(provider);
+      accessToken = result.credential.accessToken;
+      showToast("✅ ログインしました: " + result.user.email);
+    } catch(e){ showToast("ログイン失敗: " + e.message); }
+  }
+}
+
+async function saveToFirestore(){
+  if(!currentUser){ showToast("⚠️ 未ログイン"); return; }
+  showToast("保存中... records件数: "+records.length);
+  try{
+    await db.collection("users").doc(currentUser.uid).set({records, settings, updatedAt: firebase.firestore.FieldValue.serverTimestamp()});
+    const el=document.getElementById("fb-sync-status");
+    if(el) el.textContent="最終保存: "+new Date().toLocaleTimeString("ja-JP");
+    showToast("✅ Firestore保存完了 "+records.length+"件");
+  } catch(e){ showToast("❌ 保存失敗: "+e.message); }
+}
+
+async function loadFromFirestore(){
+  if(!currentUser) return;
+  try{
+    const doc = await db.collection("users").doc(currentUser.uid).get();
+    if(doc.exists){
+      const data = doc.data();
+      if(data.records && data.records.length > 0) records = data.records;
+      if(data.settings && Object.keys(data.settings).length > 0) settings = {...settings, ...data.settings};
+      const el=document.getElementById("fb-sync-status");
+      if(el) el.textContent="最終読込: "+new Date().toLocaleTimeString("ja-JP");
+    }
+    // どちらの場合もローカルデータを保存してFirestoreに同期
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    await saveToFirestore();
+  } catch(e){ showToast("クラウド読込失敗: "+e.message); }
+}
+
 
 // ===== 定数 =====
 const STORAGE_KEY = "attendance_v5";
@@ -347,7 +405,6 @@ let settings = {
   bankNo:"",
   bankHolder:"",
   payDay:0,
-  gmailClientId:""
 };
 let clockedIn = null;
 
@@ -367,12 +424,10 @@ function generateDummyRecords(){
 
 // ===== 初期化 =====
 function init(){
-  const r=localStorage.getItem(STORAGE_KEY);
-  if(r){try{records=JSON.parse(r)}catch{}}
-  else{records=generateDummyRecords();localStorage.setItem(STORAGE_KEY,JSON.stringify(records));}
-  const s=localStorage.getItem(SETTINGS_KEY);
-  if(s){try{settings={...settings,...JSON.parse(s)}}catch{}}
-  else{localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));}
+  // 初期データを強制セット（Firestoreへの初回移行用）
+  records=generateDummyRecords();
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(records));
+  localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));
   if(!Array.isArray(settings.clientEmails)) settings.clientEmails=settings.clientEmails?[settings.clientEmails]:[];
   loadSettingsUI();
   const now=new Date();
@@ -382,7 +437,6 @@ function init(){
   setInterval(tickClock,1000); tickClock();
   renderRecords(); renderInvoice();
   // 保存済みクライアントIDがあればGAPI読み込み
-  if(settings.gmailClientId) loadGapiScripts(settings.gmailClientId);
 }
 
 // ===== 時計 =====
@@ -626,82 +680,6 @@ function buildInvoiceBody(month,calc,dueDate,detailRows){
     </div>`;
 }
 
-// ===== Gmail API =====
-function loadGapiScripts(clientId){
-  if(document.getElementById("gapi-script")) return;
-  const s1=document.createElement("script");
-  s1.id="gapi-script"; s1.src="https://apis.google.com/js/api.js";
-  s1.onload=()=>{
-    gapi.load("client",async()=>{
-      await gapi.client.init({discoveryDocs:["https://www.googleapis.com/discovery/v1/apis/gmail/v1/rest"]});
-      gapiInited=true; maybeEnableButtons();
-    });
-  };
-  document.body.appendChild(s1);
-  const s2=document.createElement("script");
-  s2.src="https://accounts.google.com/gsi/client";
-  s2.onload=()=>{
-    tokenClient=google.accounts.oauth2.initTokenClient({
-      client_id:clientId,
-      scope:GMAIL_SCOPES,
-      callback:""
-    });
-    gisInited=true; maybeEnableButtons();
-  };
-  document.body.appendChild(s2);
-}
-
-function maybeEnableButtons(){
-  if(gapiInited && gisInited){
-    // アクセストークンが既にあれば接続済み表示
-    if(accessToken){
-      showConnected();
-    }
-  }
-}
-
-function connectGmailAPI(){
-  const clientId=document.getElementById("gmail-client-id").value.trim();
-  if(!clientId){showToast("クライアントIDを入力してください");return;}
-  settings.gmailClientId=clientId;
-  localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));
-  loadGapiScripts(clientId);
-  // スクリプト読み込み後に認証
-  setTimeout(()=>requestGmailAuth(),1500);
-}
-
-function requestGmailAuth(){
-  if(!tokenClient){showToast("しばらく待ってから再試行してください");return;}
-  tokenClient.callback=async(resp)=>{
-    if(resp.error){showToast("認証に失敗しました: "+resp.error);return;}
-    accessToken=resp.access_token;
-    gapi.client.setToken({access_token:accessToken});
-    showConnected();
-    showToast("✅ Gmailに接続しました！");
-  };
-  tokenClient.requestAccessToken({prompt:"consent"});
-}
-
-function showConnected(){
-  document.getElementById("gmail-api-setup").classList.add("hidden");
-  document.getElementById("gmail-connected").classList.remove("hidden");
-  // ログインユーザー取得
-  if(accessToken){
-    fetch("https://www.googleapis.com/oauth2/v3/userinfo",{
-      headers:{Authorization:`Bearer ${accessToken}`}
-    }).then(r=>r.json()).then(d=>{
-      document.getElementById("gmail-user-email").textContent=d.email||"";
-    }).catch(()=>{});
-  }
-}
-
-function disconnectGmail(){
-  if(accessToken) google.accounts.oauth2.revoke(accessToken,()=>{});
-  accessToken=null;
-  document.getElementById("gmail-api-setup").classList.remove("hidden");
-  document.getElementById("gmail-connected").classList.add("hidden");
-  showToast("Gmailの接続を切断しました");
-}
 
 // ===== PDF生成（Base64） =====
 async function generatePDFBase64(month,calc,dueDate){
@@ -747,12 +725,30 @@ ${buildInvoiceBody(month,calc,dueDate,detailRows)}
 }
 
 // ===== Gmail API送信 =====
+async function downloadPDF(){
+  const month=document.getElementById("inv-month").value;
+  if(!month){showToast("対象月を選択してください");return;}
+  const calc=calcInvoice(month);
+  const dueDate=calcDueDate(month);
+  showToast("PDF生成中...");
+  try{
+    const base64=await generatePDFBase64(month,calc,dueDate);
+    const a=document.createElement("a");
+    a.href="data:application/pdf;base64,"+base64;
+    a.download=`請求書_${month}.pdf`;
+    a.click();
+  }catch(e){showToast("PDF生成失敗: "+e.message);}
+}
+
 async function sendWithGmailAPI(){
   if(!accessToken){
-    if(!settings.gmailClientId){
-      showToast("先にGmail APIのクライアントIDを設定してください"); return;
-    }
-    requestGmailAuth(); return;
+    showToast("Gmail送信のため再認証します...");
+    try{
+      const provider = new firebase.auth.GoogleAuthProvider();
+      provider.addScope("https://www.googleapis.com/auth/gmail.send");
+      const result = await auth.signInWithPopup(provider);
+      accessToken = result.credential.accessToken;
+    } catch(e){ showToast("認証失敗: "+e.message); return; }
   }
   const btn=document.getElementById("send-btn");
   const status=document.getElementById("send-status");
@@ -860,7 +856,6 @@ ${settings.myAddress}`;
   btn.disabled=false; btn.textContent="📤 PDFを添付してGmailで送信";
 }
 
-function showSetupGuide(){document.getElementById("guide-overlay").style.display="flex";}
 
 // ===== メールタグ =====
 function renderEmailTags(){
@@ -889,11 +884,10 @@ function loadSettingsUI(){
     const el=document.getElementById("s-"+k); if(el) el.value=settings[k]||"";
   });
   ["minHours","maxHours","monthlyFee","hourlyRate","payDay"].forEach(k=>{
-    const el=document.getElementById("s-"+k); if(el) el.value=settings[k]||"";
+    const el=document.getElementById("s-"+k); if(el) el.value=settings[k]!=null?settings[k]:"";
   });
   if(!Array.isArray(settings.clientEmails)) settings.clientEmails=[];
   renderEmailTags();
-  if(settings.gmailClientId) document.getElementById("gmail-client-id").value=settings.gmailClientId;
 }
 function saveSettings(){
   const v=id=>document.getElementById(id)?.value||"";
@@ -908,15 +902,18 @@ function saveSettings(){
     bankNo:v("s-bankNo"), bankHolder:v("s-bankHolder"), payDay:n("s-payDay"),
   };
   localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));
+  if(currentUser) saveToFirestore();
   const btn=document.getElementById("save-btn");
   btn.textContent="✓ 保存しました";
   setTimeout(()=>btn.textContent="設定を保存",2500);
   renderInvoice();
 }
 
+
 function persist(){
   localStorage.setItem(STORAGE_KEY,JSON.stringify(records));
   renderRecords(); renderInvoice();
+  if(currentUser) saveToFirestore();
 }
 function showToast(msg,ms=5000){
   const t=document.getElementById("toast");
