@@ -99,6 +99,7 @@ td{padding:8px;font-size:12px;border-bottom:1px solid #f1f5f9;vertical-align:mid
       <label class="lbl">メモ（任意）</label>
       <input type="text" id="note-input" placeholder="例: 開発作業、打ち合わせ" style="margin-bottom:14px"/>
       <button class="btn btn-green" onclick="clockIn()">出勤打刻</button>
+      <button class="btn" onclick="recordDayOff()" style="width:100%;padding:12px;font-size:14px;border-radius:10px;background:#f1f5f9;color:#64748b;margin-top:10px;border:1.5px solid #e2e8f0">🏖️ お休みを記録</button>
     </div>
     <div class="card hidden" id="clock-out-card">
       <div style="background:#f0fdf4;border-radius:8px;padding:12px 16px;margin-bottom:14px">
@@ -463,6 +464,26 @@ function clockIn(){
   document.getElementById("clocked-in-note").textContent=note?"📝 "+note:"";
   document.getElementById("working-badge").style.display="inline";
 }
+function recordDayOff(){
+  const now=new Date();
+  const localDate=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+  if(records.some(r=>r.date===localDate)){
+    if(!confirm("今日の記録がすでにあります。お休みとして追加しますか？")) return;
+  }
+  records.push({id:Date.now(),date:localDate,inTime:now.toISOString(),outTime:now.toISOString(),breakMin:0,duration:0,note:"お休み",type:"off"});
+  persist();
+  showToast("🏖️ お休みを記録しました");
+}
+
+function toggleDayOff(id){
+  records=records.map(r=>{
+    if(r.id!==id) return r;
+    if(r.type==='off') return {...r,type:"work"};
+    return {...r,type:"off",duration:0,note:r.note||"お休み"};
+  });
+  persist();
+}
+
 function clockOut(){
   const outTime=new Date().toISOString();
   const rawMin=minBetween(clockedIn.time,outTime),breakMin=60;
@@ -499,14 +520,23 @@ function renderRecords(){
   if(!recs.length) return;
   const totalMin=recs.reduce((s,r)=>s+r.duration,0);
   document.getElementById("records-tbody").innerHTML=recs.map(r=>`
-    <tr>
+    <tr style="${r.type==='off'?'background:#fafafa;color:#94a3b8':''}">
       <td class="nowrap" style="font-weight:600">${esc(toDateStr(new Date(r.inTime)))}</td>
-      <td class="nowrap">${esc(toHHMM(new Date(r.inTime)))}</td>
-      <td class="nowrap">${esc(toHHMM(new Date(r.outTime)))}</td>
-      <td>${r.breakMin||0}分</td>
-      <td class="nowrap" style="color:#1e40af;font-weight:700">${esc(fmtH(r.duration))}</td>
+      ${r.type==='off'
+        ? `<td colspan="4" style="color:#94a3b8;font-size:12px">🏖️ お休み</td>`
+        : `<td class="nowrap">${esc(toHHMM(new Date(r.inTime)))}</td>
+           <td class="nowrap">${esc(toHHMM(new Date(r.outTime)))}</td>
+           <td>${r.breakMin||0}分</td>
+           <td class="nowrap" style="color:#1e40af;font-weight:700">${esc(fmtH(r.duration))}</td>`
+      }
       <td style="color:#64748b;font-size:11px">${esc(r.note||"-")}</td>
-      <td><button class="edit-btn" onclick="openEdit(${r.id})">編集</button></td>
+      <td style="display:flex;gap:4px">
+        ${r.type==='off'
+          ? `<button class="edit-btn" onclick="toggleDayOff(${r.id})" style="background:#fff0f0;color:#dc2626">取消</button>`
+          : `<button class="edit-btn" onclick="openEdit(${r.id})">編集</button>
+             <button class="edit-btn" onclick="toggleDayOff(${r.id})" style="background:#f1f5f9;color:#64748b">休み</button>`
+        }
+      </td>
     </tr>`).join("");
   document.getElementById("records-tfoot").innerHTML=`
     <tr style="background:#f8fafc">
@@ -594,13 +624,13 @@ function renderInvoice(){
       </div>
     </div>`;
   const detailRows=calc.recs.map(r=>`
-    <tr>
+    <tr style="${r.type==='off'?'color:#94a3b8':''}">
       <td class="nowrap">${esc(toDateStr(new Date(r.inTime)))}</td>
-      <td class="center">${esc(toHHMM(new Date(r.inTime)))}</td>
-      <td class="center">${esc(toHHMM(new Date(r.outTime)))}</td>
-      <td class="center" style="color:#64748b">${r.breakMin||0}分</td>
-      <td class="right" style="font-weight:600">${esc(fmtH(r.duration))}</td>
-      <td style="color:#64748b">${esc(r.note||"—")}</td>
+      <td class="center">${r.type==='off'?'--:--':esc(toHHMM(new Date(r.inTime)))}</td>
+      <td class="center">${r.type==='off'?'--:--':esc(toHHMM(new Date(r.outTime)))}</td>
+      <td class="center" style="color:#94a3b8">${r.type==='off'?'—':(r.breakMin||0)+'分'}</td>
+      <td class="right" style="font-weight:600">${r.type==='off'?'—':esc(fmtH(r.duration))}</td>
+      <td style="color:#94a3b8">${esc(r.note||"—")}</td>
     </tr>`).join("");
   document.getElementById("invoice-preview").innerHTML=buildInvoiceBody(month,calc,dueDate,detailRows);
 }
@@ -681,13 +711,13 @@ function buildInvoiceBody(month,calc,dueDate,detailRows){
 // ===== PDF生成（Base64） =====
 async function generatePDFBase64(month,calc,dueDate){
   const detailRows=calc.recs.map(r=>`
-    <tr>
+    <tr style="${r.type==='off'?'color:#aaa':''}">
       <td>${toDateStr(new Date(r.inTime))}</td>
-      <td style="text-align:center">${toHHMM(new Date(r.inTime))}</td>
-      <td style="text-align:center">${toHHMM(new Date(r.outTime))}</td>
-      <td style="text-align:center">${r.breakMin||0}分</td>
-      <td style="text-align:right;font-weight:600">${fmtH(r.duration)}</td>
-      <td style="color:#555">${r.note||"—"}</td>
+      <td style="text-align:center">${r.type==='off'?'--:--':toHHMM(new Date(r.inTime))}</td>
+      <td style="text-align:center">${r.type==='off'?'--:--':toHHMM(new Date(r.outTime))}</td>
+      <td style="text-align:center">${r.type==='off'?'—':(r.breakMin||0)+'分'}</td>
+      <td style="text-align:right;font-weight:600">${r.type==='off'?'—':fmtH(r.duration)}</td>
+      <td style="color:#aaa">${r.note||"—"}</td>
     </tr>`).join("");
   const iframe=document.createElement("iframe");
   iframe.style.cssText="position:fixed;top:-9999px;left:-9999px;width:794px;border:none;";
